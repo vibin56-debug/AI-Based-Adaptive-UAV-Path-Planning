@@ -3,7 +3,6 @@ from rclpy.node import Node
 
 from nav_msgs.msg import Path
 from geometry_msgs.msg import PoseStamped
-from geometry_msgs.msg import Point
 from std_msgs.msg import Float32
 
 import numpy as np
@@ -13,7 +12,7 @@ from .mission_config import MISSION
 from .weather_manager import WeatherManager
 from .emergency_manager import EmergencyManager
 from .obstacle_manager import ObstacleManager
-
+from .emergency_station_manager import EmergencyStationManager
 
 class AStarNode(Node):
 
@@ -24,12 +23,6 @@ class AStarNode(Node):
         self.path_publisher = self.create_publisher(
             Path,
             '/uav_path',
-            10
-        )
-
-        self.position_publisher = self.create_publisher(
-            Point,
-            '/uav_position',
             10
         )
 
@@ -53,13 +46,12 @@ class AStarNode(Node):
         self.goal = MISSION["goal"]
         self.weather = MISSION["weather"]
         self.battery = MISSION["battery"]
-        self.emergency_goal = MISSION["emergency_goal"]
         self.dynamic_obstacle = MISSION["dynamic_obstacle"]
 
         self.weather_manager = WeatherManager()
         self.emergency_manager = EmergencyManager()
         self.obstacle_manager = ObstacleManager()
-
+        self.emergency_station_manager = EmergencyStationManager()
         self.path = astar(
             self.grid,
             self.start,
@@ -207,11 +199,16 @@ class AStarNode(Node):
             "EMERGENCY DETECTED"
         )
 
-        self.emergency_manager.trigger_emergency(
-            self.emergency_goal
+        self.goal = (
+            self.emergency_station_manager
+            .get_nearest_station(
+                self.current_position
+            )
         )
 
-        self.goal = self.emergency_goal
+        self.emergency_manager.trigger_emergency(
+            self.goal
+        )
 
         self.get_logger().warn(
             f"Emergency Goal: {self.goal}"
@@ -229,24 +226,6 @@ class AStarNode(Node):
 
         self.get_logger().warn(
             "PATH REPLANNED"
-        )
-
-    def publish_position(self):
-
-        msg = Point()
-
-        msg.x = float(
-            self.current_position[1]
-        )
-
-        msg.y = float(
-            self.current_position[0]
-        )
-
-        msg.z = 0.0
-
-        self.position_publisher.publish(
-            msg
         )
 
     def publish_path(self):
@@ -321,23 +300,22 @@ class AStarNode(Node):
             self.trigger_dynamic_obstacle()
 
             self.publish_path()
-            self.publish_position()
 
             return
-
-
         if (
             self.obstacle_triggered
             and not self.emergency_triggered
             and self.current_index >= len(self.path) // 2
-        ):
+           ):
 
-            self.trigger_emergency()
+               self.trigger_emergency()
 
-            self.publish_path()
-            self.publish_position()
+               self.publish_path()
 
-            return
+               return
+
+        self.publish_path()
+
         self.current_index += 1
 
 

@@ -41,6 +41,13 @@ def generate_launch_description():
             package='uav_planner',
             executable='mission_status_publisher',
             output='screen'
+        ),
+
+        Node(
+            package='rviz2',
+            executable='rviz2',
+            name='rviz2',
+            output='screen'
         )
 
     ])
